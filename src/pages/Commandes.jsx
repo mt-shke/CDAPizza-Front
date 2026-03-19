@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
+import { API_URL } from "../config";
 
 const ETAT_STYLES = {
    PAYER: "bg-yellow-100 text-yellow-700 border border-yellow-200",
@@ -30,10 +31,38 @@ const ETAT_SUIVANT = {
    LIVRER: null,
 };
 
+const getRemises = (commande, lignes, numeroCommande) => {
+   const remises = [];
+
+   // Remise 10% si c'est la 3ème, 6ème, 9ème commande du client
+   if (numeroCommande && numeroCommande % 3 === 0) {
+      remises.push({
+         label: "−10% fidélité",
+         color: "bg-purple-100 text-purple-700 border border-purple-200",
+      });
+   }
+
+   // Remise 5% si plus de 5 pizzas
+   const totalPizzas = (lignes || []).reduce(
+      (sum, l) => sum + (l.quantite || 0),
+      0,
+   );
+   if (totalPizzas >= 5) {
+      remises.push({
+         label: "−5% volume",
+         color: "bg-blue-100 text-blue-700 border border-blue-200",
+      });
+   }
+
+   return remises;
+};
+
 export default function Commandes() {
    const [commandes, setCommandes] = useState([]);
    const [lignes, setLignes] = useState({});
    const [pizzas, setPizzas] = useState({});
+   const [users, setUsers] = useState({});
+   const [numeroCommandeParUser, setNumeroCommandeParUser] = useState({});
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState("");
    const [selectedId, setSelectedId] = useState(null);
@@ -47,12 +76,10 @@ export default function Commandes() {
 
    const fetchAll = async () => {
       try {
-         const resCommandes = await fetch(
-            "http://localhost:8080/api/commandes",
-            {
-               headers: { Authorization: `Bearer ${token}` },
-            },
-         );
+         // Commandes
+         const resCommandes = await fetch(API_URL + "/commandes", {
+            headers: { Authorization: `Bearer ${token}` },
+         });
          if (resCommandes.status === 401) {
             logout();
             navigate("/login");
@@ -62,7 +89,20 @@ export default function Commandes() {
          const allCommandes = await resCommandes.json();
          setCommandes(allCommandes);
 
-         const resPizzas = await fetch("http://localhost:8080/api/pizzas", {
+         // Calcul du numéro chronologique de chaque commande par client
+         const numeroCmd = {};
+         const compteurParUser = {};
+         [...allCommandes]
+            .sort((a, b) => new Date(a.date) - new Date(b.date))
+            .forEach((c) => {
+               compteurParUser[c.id_user] =
+                  (compteurParUser[c.id_user] || 0) + 1;
+               numeroCmd[c.id_commande] = compteurParUser[c.id_user];
+            });
+         setNumeroCommandeParUser(numeroCmd);
+
+         // Pizzas
+         const resPizzas = await fetch(API_URL + "/pizzas", {
             headers: { Authorization: `Bearer ${token}` },
          });
          if (!resPizzas.ok) throw new Error();
@@ -73,11 +113,25 @@ export default function Commandes() {
          });
          setPizzas(pizzaMap);
 
+         // Users
+         const resUsers = await fetch(API_URL + "/users", {
+            headers: { Authorization: `Bearer ${token}` },
+         });
+         if (resUsers.ok) {
+            const allUsers = await resUsers.json();
+            const userMap = {};
+            allUsers.forEach((u) => {
+               userMap[u.id] = u;
+            });
+            setUsers(userMap);
+         }
+
+         // Lignes de commande
          const lignesMap = {};
          await Promise.all(
             allCommandes.map(async (c) => {
                const resLignes = await fetch(
-                  `http://localhost:8080/api/contenir/commande/${c.id_commande}`,
+                  API_URL + `/contenir/commande/${c.id_commande}`,
                   { headers: { Authorization: `Bearer ${token}` } },
                );
                if (resLignes.ok) {
@@ -105,7 +159,7 @@ export default function Commandes() {
       setUpdating(true);
       try {
          const response = await fetch(
-            `http://localhost:8080/api/commandes/${commande.id_commande}`,
+            API_URL + `/commandes/${commande.id_commande}`,
             {
                method: "PUT",
                headers: {
@@ -196,144 +250,169 @@ export default function Commandes() {
                            (ETAT_ORDER[a.etat] || 99) -
                            (ETAT_ORDER[b.etat] || 99),
                      )
-                     .map((commande) => (
-                        <div
-                           key={commande.id_commande}
-                           className={`rounded-xl shadow-sm border overflow-hidden transition
-                    ${
-                       commande.etat === "LIVRER"
-                          ? "bg-green-100 border-green-400"
-                          : "bg-white border-gray-100"
-                    }`}
-                        >
-                           {/* Header — clic pour ouvrir/fermer le bouton état */}
+                     .map((commande) => {
+                        const remises = getRemises(
+                           commande,
+                           lignes[commande.id_commande],
+                           numeroCommandeParUser[commande.id_commande],
+                        );
+                        const client = users[commande.id_user];
+
+                        return (
                            <div
-                              className="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-orange-50 transition"
-                              onClick={() =>
-                                 handleCardClick(commande.id_commande)
-                              }
+                              key={commande.id_commande}
+                              className={`rounded-xl shadow-sm border overflow-hidden transition
+                      ${
+                         commande.etat === "LIVRER"
+                            ? "bg-green-100 border-green-400"
+                            : "bg-white border-gray-100"
+                      }`}
                            >
-                              <div className="flex items-center gap-4">
+                              {/* Header */}
+                              <div
+                                 className="px-6 py-4 flex items-center justify-between cursor-pointer hover:bg-orange-50 transition"
+                                 onClick={() =>
+                                    handleCardClick(commande.id_commande)
+                                 }
+                              >
+                                 <div className="flex items-center gap-4">
+                                    <div
+                                       className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm
+                          ${
+                             commande.etat === "LIVRER"
+                                ? "bg-green-400 text-white"
+                                : "bg-orange-100 text-orange-500"
+                          }`}
+                                    >
+                                       #{commande.id_commande}
+                                    </div>
+                                    <div>
+                                       <div className="flex items-center gap-2 flex-wrap">
+                                          <p className="text-gray-800 font-medium text-sm">
+                                             Commande n°{commande.id_commande}
+                                          </p>
+                                          {remises.map((r, i) => (
+                                             <span
+                                                key={i}
+                                                className={`text-xs font-semibold px-2 py-0.5 rounded-full ${r.color}`}
+                                             >
+                                                {r.label}
+                                             </span>
+                                          ))}
+                                       </div>
+                                       <p className="text-gray-500 text-xs mt-0.5">
+                                          👤{" "}
+                                          {client
+                                             ? client.username
+                                             : `Client #${commande.id_user}`}
+                                          {" · "}
+                                          {commande.date
+                                             ? new Date(
+                                                  commande.date,
+                                               ).toLocaleString("fr-FR", {
+                                                  day: "2-digit",
+                                                  month: "2-digit",
+                                                  year: "numeric",
+                                                  hour: "2-digit",
+                                                  minute: "2-digit",
+                                               })
+                                             : "Date inconnue"}
+                                       </p>
+                                    </div>
+                                 </div>
+                                 <div className="flex items-center gap-4">
+                                    <span className="text-gray-800 font-semibold text-sm">
+                                       {commande.montant != null
+                                          ? Number(commande.montant).toFixed(
+                                               2,
+                                            ) + " €"
+                                          : "—"}
+                                    </span>
+                                    <span
+                                       className={`text-xs font-medium px-3 py-1 rounded-full ${ETAT_STYLES[commande.etat] || "bg-gray-100 text-gray-500"}`}
+                                    >
+                                       {ETAT_LABELS[commande.etat] ||
+                                          commande.etat}
+                                    </span>
+                                    <span
+                                       className={`text-gray-400 text-lg transition-transform duration-200 ${selectedId === commande.id_commande ? "rotate-90" : ""}`}
+                                    >
+                                       ›
+                                    </span>
+                                 </div>
+                              </div>
+
+                              {/* Pizzas — toujours visibles */}
+                              {lignes[commande.id_commande]?.length > 0 && (
                                  <div
-                                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm
+                                    className={`border-t px-6 py-3
                         ${
                            commande.etat === "LIVRER"
-                              ? "bg-green-400 text-white"
-                              : "bg-orange-100 text-orange-500"
+                              ? "border-green-300 bg-green-100"
+                              : "border-gray-100 bg-orange-50"
                         }`}
                                  >
-                                    #{commande.id_commande}
+                                    <div className="flex flex-wrap gap-2">
+                                       {lignes[commande.id_commande].map(
+                                          (ligne) => {
+                                             const pizza =
+                                                pizzas[ligne.id?.idPizza];
+                                             return (
+                                                <div
+                                                   key={`${ligne.id?.idCommande}-${ligne.id?.idPizza}`}
+                                                   className="flex items-center gap-2 bg-white border border-orange-100 rounded-lg px-3 py-1.5"
+                                                >
+                                                   <span className="text-sm">
+                                                      🍕
+                                                   </span>
+                                                   <span className="text-sm text-gray-700 font-medium">
+                                                      {pizza
+                                                         ? pizza.nom
+                                                         : `Pizza #${ligne.id?.idPizza}`}
+                                                   </span>
+                                                   <span className="text-xs bg-orange-100 text-orange-600 font-semibold px-2 py-0.5 rounded-full">
+                                                      x{ligne.quantite}
+                                                   </span>
+                                                </div>
+                                             );
+                                          },
+                                       )}
+                                    </div>
                                  </div>
-                                 <div>
-                                    <p className="text-gray-800 font-medium text-sm">
-                                       Commande n°{commande.id_commande}
-                                    </p>
-                                    <p className="text-gray-400 text-xs mt-0.5">
-                                       {commande.date
-                                          ? new Date(
-                                               commande.date,
-                                            ).toLocaleString("fr-FR", {
-                                               day: "2-digit",
-                                               month: "2-digit",
-                                               year: "numeric",
-                                               hour: "2-digit",
-                                               minute: "2-digit",
-                                            })
-                                          : "Date inconnue"}
-                                    </p>
-                                 </div>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                 <span className="text-gray-800 font-semibold text-sm">
-                                    {commande.montant != null
-                                       ? Number(commande.montant).toFixed(2) +
-                                         " €"
-                                       : "—"}
-                                 </span>
-                                 <span
-                                    className={`text-xs font-medium px-3 py-1 rounded-full ${ETAT_STYLES[commande.etat] || "bg-gray-100 text-gray-500"}`}
-                                 >
-                                    {ETAT_LABELS[commande.etat] ||
-                                       commande.etat}
-                                 </span>
-                                 <span
-                                    className={`text-gray-400 text-lg transition-transform duration-200 ${selectedId === commande.id_commande ? "rotate-90" : ""}`}
-                                 >
-                                    ›
-                                 </span>
-                              </div>
-                           </div>
+                              )}
 
-                           {/* Pizzas — toujours visibles */}
-                           {lignes[commande.id_commande]?.length > 0 && (
-                              <div
-                                 className={`border-t px-6 py-3
-                      ${
-                         commande.etat === "LIVRER"
-                            ? "border-green-300 bg-green-100"
-                            : "border-gray-100 bg-orange-50"
-                      }`}
-                              >
-                                 <div className="flex flex-wrap gap-2">
-                                    {lignes[commande.id_commande].map(
-                                       (ligne) => {
-                                          const pizza =
-                                             pizzas[ligne.id?.idPizza];
-                                          return (
-                                             <div
-                                                key={`${ligne.id?.idCommande}-${ligne.id?.idPizza}`}
-                                                className="flex items-center gap-2 bg-white border border-orange-100 rounded-lg px-3 py-1.5"
-                                             >
-                                                <span className="text-sm">
-                                                   🍕
-                                                </span>
-                                                <span className="text-sm text-gray-700 font-medium">
-                                                   {pizza
-                                                      ? pizza.nom
-                                                      : `Pizza #${ligne.id?.idPizza}`}
-                                                </span>
-                                                <span className="text-xs bg-orange-100 text-orange-600 font-semibold px-2 py-0.5 rounded-full">
-                                                   x{ligne.quantite}
-                                                </span>
-                                             </div>
-                                          );
-                                       },
+                              {/* Bouton changement état */}
+                              {selectedId === commande.id_commande && (
+                                 <div
+                                    className={`border-t px-6 py-4
+                        ${
+                           commande.etat === "LIVRER"
+                              ? "border-green-300 bg-green-50"
+                              : "border-gray-100 bg-white"
+                        }`}
+                                 >
+                                    {ETAT_SUIVANT[commande.etat] ? (
+                                       <button
+                                          onClick={() =>
+                                             handleChangerEtat(commande)
+                                          }
+                                          disabled={updating}
+                                          className="bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-semibold px-5 py-2 rounded-lg transition"
+                                       >
+                                          {updating
+                                             ? "Mise à jour..."
+                                             : `Passer à : ${ETAT_LABELS[ETAT_SUIVANT[commande.etat]]}`}
+                                       </button>
+                                    ) : (
+                                       <p className="text-sm text-green-600 font-medium">
+                                          ✅ Commande terminée
+                                       </p>
                                     )}
                                  </div>
-                              </div>
-                           )}
-
-                           {/* Bouton changement état — visible seulement si carte sélectionnée */}
-                           {selectedId === commande.id_commande && (
-                              <div
-                                 className={`border-t px-6 py-4
-                      ${
-                         commande.etat === "LIVRER"
-                            ? "border-green-300 bg-green-50"
-                            : "border-gray-100 bg-white"
-                      }`}
-                              >
-                                 {ETAT_SUIVANT[commande.etat] ? (
-                                    <button
-                                       onClick={() =>
-                                          handleChangerEtat(commande)
-                                       }
-                                       disabled={updating}
-                                       className="bg-orange-500 hover:bg-orange-600 disabled:bg-orange-300 text-white text-sm font-semibold px-5 py-2 rounded-lg transition"
-                                    >
-                                       {updating
-                                          ? "Mise à jour..."
-                                          : `Passer à : ${ETAT_LABELS[ETAT_SUIVANT[commande.etat]]}`}
-                                    </button>
-                                 ) : (
-                                    <p className="text-sm text-green-600 font-medium">
-                                       ✅ Commande terminée
-                                    </p>
-                                 )}
-                              </div>
-                           )}
-                        </div>
-                     ))}
+                              )}
+                           </div>
+                        );
+                     })}
                </div>
             )}
          </div>

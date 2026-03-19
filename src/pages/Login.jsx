@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
+import { API_URL } from "../config";
 
 export default function Login() {
    const [username, setUsername] = useState("");
@@ -16,7 +17,7 @@ export default function Login() {
       setError("");
       setLoading(true);
       try {
-         const response = await fetch("http://localhost:8080/api/auth/login", {
+         const response = await fetch(API_URL + "/auth/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({ username, password }),
@@ -29,7 +30,6 @@ export default function Login() {
          const data = await response.json();
          login(data.token);
 
-         // Redirige selon le rôle
          const decoded = jwtDecode(data.token);
          if (decoded.role === "client") {
             navigate("/mes-commandes");
@@ -44,9 +44,8 @@ export default function Login() {
 
    return (
       <div className="min-h-screen bg-orange-50 flex items-center justify-center px-4">
-         {/* Card */}
          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl overflow-hidden">
-            {/* Header orange */}
+            {/* Header */}
             <div className="bg-orange-500 px-8 py-10 text-center">
                <div className="text-5xl mb-3">🍕</div>
                <h1 className="text-3xl font-bold text-white tracking-tight">
@@ -110,8 +109,14 @@ export default function Login() {
 
             {/* Footer */}
             <div className="px-8 pb-6 text-center">
-               <p className="text-xs text-gray-400">
-                  CDAPizza — Gestion des commandes
+               <p className="text-sm text-gray-400">
+                  Pas encore de compte ?{" "}
+                  <button
+                     onClick={() => navigate("/register")}
+                     className="text-orange-500 hover:text-orange-600 font-medium transition"
+                  >
+                     S'inscrire
+                  </button>
                </p>
             </div>
          </div>

@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { jwtDecode } from "jwt-decode";
+import { API_URL } from "../config";
 
 const ETAT_STYLES = {
    PAYER: "bg-yellow-100 text-yellow-700 border border-yellow-200",
@@ -24,10 +25,37 @@ const ETAT_ORDER = {
    LIVRER: 4,
 };
 
+const getRemises = (lignes, numeroCommande) => {
+   const remises = [];
+
+   // Remise 10% si c'est la 3ème, 6ème, 9ème commande
+   if (numeroCommande && numeroCommande % 3 === 0) {
+      remises.push({
+         label: "−10% fidélité",
+         color: "bg-purple-100 text-purple-700 border border-purple-200",
+      });
+   }
+
+   // Remise 5% si plus de 5 pizzas
+   const totalPizzas = (lignes || []).reduce(
+      (sum, l) => sum + (l.quantite || 0),
+      0,
+   );
+   if (totalPizzas >= 5) {
+      remises.push({
+         label: "−5% volume",
+         color: "bg-blue-100 text-blue-700 border border-blue-200",
+      });
+   }
+
+   return remises;
+};
+
 export default function MesCommandes() {
    const [commandes, setCommandes] = useState([]);
    const [lignes, setLignes] = useState({});
    const [pizzas, setPizzas] = useState({});
+   const [numeroCommandeParId, setNumeroCommandeParId] = useState({});
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState("");
    const { token, logout } = useAuth();
@@ -42,12 +70,10 @@ export default function MesCommandes() {
          const decoded = jwtDecode(token);
          const idUser = decoded.id_user;
 
-         const resCommandes = await fetch(
-            "http://localhost:8080/api/commandes",
-            {
-               headers: { Authorization: `Bearer ${token}` },
-            },
-         );
+         // Commandes
+         const resCommandes = await fetch(API_URL + "/commandes", {
+            headers: { Authorization: `Bearer ${token}` },
+         });
          if (resCommandes.status === 401) {
             logout();
             navigate("/login");
@@ -58,7 +84,17 @@ export default function MesCommandes() {
          const mesCommandes = allCommandes.filter((c) => c.id_user === idUser);
          setCommandes(mesCommandes);
 
-         const resPizzas = await fetch("http://localhost:8080/api/pizzas", {
+         // Calcul du numéro chronologique de chaque commande du client
+         const numeroCmd = {};
+         [...mesCommandes]
+            .sort((a, b) => new Date(a.date) - new Date(b.date))
+            .forEach((c, index) => {
+               numeroCmd[c.id_commande] = index + 1;
+            });
+         setNumeroCommandeParId(numeroCmd);
+
+         // Pizzas
+         const resPizzas = await fetch(API_URL + "/pizzas", {
             headers: { Authorization: `Bearer ${token}` },
          });
          if (!resPizzas.ok) throw new Error();
@@ -69,11 +105,12 @@ export default function MesCommandes() {
          });
          setPizzas(pizzaMap);
 
+         // Lignes de commande
          const lignesMap = {};
          await Promise.all(
             mesCommandes.map(async (c) => {
                const resLignes = await fetch(
-                  `http://localhost:8080/api/contenir/commande/${c.id_commande}`,
+                  API_URL + `/contenir/commande/${c.id_commande}`,
                   { headers: { Authorization: `Bearer ${token}` } },
                );
                if (resLignes.ok) {
@@ -161,102 +198,122 @@ export default function MesCommandes() {
                            (ETAT_ORDER[a.etat] || 99) -
                            (ETAT_ORDER[b.etat] || 99),
                      )
-                     .map((commande) => (
-                        <div
-                           key={commande.id_commande}
-                           className={`rounded-xl shadow-sm border overflow-hidden transition
-                    ${
-                       commande.etat === "LIVRER"
-                          ? "bg-green-100 border-green-400"
-                          : "bg-white border-gray-100"
-                    }`}
-                        >
-                           <div className="px-6 py-4 flex items-center justify-between">
-                              <div className="flex items-center gap-4">
-                                 <div
-                                    className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm
-                        ${
-                           commande.etat === "LIVRER"
-                              ? "bg-green-400 text-white"
-                              : "bg-orange-100 text-orange-500"
-                        }`}
-                                 >
-                                    #{commande.id_commande}
-                                 </div>
-                                 <div>
-                                    <p className="text-gray-800 font-medium text-sm">
-                                       Commande n°{commande.id_commande}
-                                    </p>
-                                    <p className="text-gray-400 text-xs mt-0.5">
-                                       {commande.date
-                                          ? new Date(
-                                               commande.date,
-                                            ).toLocaleString("fr-FR", {
-                                               day: "2-digit",
-                                               month: "2-digit",
-                                               year: "numeric",
-                                               hour: "2-digit",
-                                               minute: "2-digit",
-                                            })
-                                          : "Date inconnue"}
-                                    </p>
-                                 </div>
-                              </div>
-                              <div className="flex items-center gap-4">
-                                 <span className="text-gray-800 font-semibold text-sm">
-                                    {commande.montant != null
-                                       ? Number(commande.montant).toFixed(2) +
-                                         " €"
-                                       : "—"}
-                                 </span>
-                                 <span
-                                    className={`text-xs font-medium px-3 py-1 rounded-full ${ETAT_STYLES[commande.etat] || "bg-gray-100 text-gray-500"}`}
-                                 >
-                                    {ETAT_LABELS[commande.etat] ||
-                                       commande.etat}
-                                 </span>
-                              </div>
-                           </div>
+                     .map((commande) => {
+                        const remises = getRemises(
+                           lignes[commande.id_commande],
+                           numeroCommandeParId[commande.id_commande],
+                        );
 
-                           {lignes[commande.id_commande]?.length > 0 && (
-                              <div
-                                 className={`border-t px-6 py-3
+                        return (
+                           <div
+                              key={commande.id_commande}
+                              className={`rounded-xl shadow-sm border overflow-hidden transition
                       ${
                          commande.etat === "LIVRER"
-                            ? "border-green-300 bg-green-100"
-                            : "border-gray-100 bg-orange-50"
+                            ? "bg-green-100 border-green-400"
+                            : "bg-white border-gray-100"
                       }`}
-                              >
-                                 <div className="flex flex-wrap gap-2">
-                                    {lignes[commande.id_commande].map(
-                                       (ligne) => {
-                                          const pizza =
-                                             pizzas[ligne.id?.idPizza];
-                                          return (
-                                             <div
-                                                key={`${ligne.id?.idCommande}-${ligne.id?.idPizza}`}
-                                                className="flex items-center gap-2 bg-white border border-orange-100 rounded-lg px-3 py-1.5"
+                           >
+                              {/* Header */}
+                              <div className="px-6 py-4 flex items-center justify-between">
+                                 <div className="flex items-center gap-4">
+                                    <div
+                                       className={`w-10 h-10 rounded-full flex items-center justify-center font-bold text-sm
+                          ${
+                             commande.etat === "LIVRER"
+                                ? "bg-green-400 text-white"
+                                : "bg-orange-100 text-orange-500"
+                          }`}
+                                    >
+                                       #{commande.id_commande}
+                                    </div>
+                                    <div>
+                                       <div className="flex items-center gap-2 flex-wrap">
+                                          <p className="text-gray-800 font-medium text-sm">
+                                             Commande n°{commande.id_commande}
+                                          </p>
+                                          {remises.map((r, i) => (
+                                             <span
+                                                key={i}
+                                                className={`text-xs font-semibold px-2 py-0.5 rounded-full ${r.color}`}
                                              >
-                                                <span className="text-sm">
-                                                   🍕
-                                                </span>
-                                                <span className="text-sm text-gray-700 font-medium">
-                                                   {pizza
-                                                      ? pizza.nom
-                                                      : `Pizza #${ligne.id?.idPizza}`}
-                                                </span>
-                                                <span className="text-xs bg-orange-100 text-orange-600 font-semibold px-2 py-0.5 rounded-full">
-                                                   x{ligne.quantite}
-                                                </span>
-                                             </div>
-                                          );
-                                       },
-                                    )}
+                                                {r.label}
+                                             </span>
+                                          ))}
+                                       </div>
+                                       <p className="text-gray-400 text-xs mt-0.5">
+                                          {commande.date
+                                             ? new Date(
+                                                  commande.date,
+                                               ).toLocaleString("fr-FR", {
+                                                  day: "2-digit",
+                                                  month: "2-digit",
+                                                  year: "numeric",
+                                                  hour: "2-digit",
+                                                  minute: "2-digit",
+                                               })
+                                             : "Date inconnue"}
+                                       </p>
+                                    </div>
+                                 </div>
+                                 <div className="flex items-center gap-4">
+                                    <span className="text-gray-800 font-semibold text-sm">
+                                       {commande.montant != null
+                                          ? Number(commande.montant).toFixed(
+                                               2,
+                                            ) + " €"
+                                          : "—"}
+                                    </span>
+                                    <span
+                                       className={`text-xs font-medium px-3 py-1 rounded-full ${ETAT_STYLES[commande.etat] || "bg-gray-100 text-gray-500"}`}
+                                    >
+                                       {ETAT_LABELS[commande.etat] ||
+                                          commande.etat}
+                                    </span>
                                  </div>
                               </div>
-                           )}
-                        </div>
-                     ))}
+
+                              {/* Pizzas */}
+                              {lignes[commande.id_commande]?.length > 0 && (
+                                 <div
+                                    className={`border-t px-6 py-3
+                        ${
+                           commande.etat === "LIVRER"
+                              ? "border-green-300 bg-green-100"
+                              : "border-gray-100 bg-orange-50"
+                        }`}
+                                 >
+                                    <div className="flex flex-wrap gap-2">
+                                       {lignes[commande.id_commande].map(
+                                          (ligne) => {
+                                             const pizza =
+                                                pizzas[ligne.id?.idPizza];
+                                             return (
+                                                <div
+                                                   key={`${ligne.id?.idCommande}-${ligne.id?.idPizza}`}
+                                                   className="flex items-center gap-2 bg-white border border-orange-100 rounded-lg px-3 py-1.5"
+                                                >
+                                                   <span className="text-sm">
+                                                      🍕
+                                                   </span>
+                                                   <span className="text-sm text-gray-700 font-medium">
+                                                      {pizza
+                                                         ? pizza.nom
+                                                         : `Pizza #${ligne.id?.idPizza}`}
+                                                   </span>
+                                                   <span className="text-xs bg-orange-100 text-orange-600 font-semibold px-2 py-0.5 rounded-full">
+                                                      x{ligne.quantite}
+                                                   </span>
+                                                </div>
+                                             );
+                                          },
+                                       )}
+                                    </div>
+                                 </div>
+                              )}
+                           </div>
+                        );
+                     })}
                </div>
             )}
          </div>

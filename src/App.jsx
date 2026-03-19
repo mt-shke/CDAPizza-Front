@@ -5,11 +5,14 @@ import Commandes from "./pages/Commandes";
 import MesCommandes from "./pages/MesCommandes";
 import NouvelleCommande from "./pages/NouvelleCommande";
 import Unauthorized from "./pages/Unauthorized";
+import Register from "./pages/Register";
 
 function App() {
    return (
       <Routes>
          {/* Public */}
+
+         <Route path="/register" element={<Register />} />
          <Route path="/login" element={<Login />} />
          <Route path="/unauthorized" element={<Unauthorized />} />
          <Route path="/" element={<Navigate to="/login" />} />
