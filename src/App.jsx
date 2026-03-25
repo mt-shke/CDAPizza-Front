@@ -60,7 +60,6 @@ function App() {
             element={
                <PrivateRoute>
                   <RoleRoute roles={["cuisine"]}>
-                     {/* <InterfaceCuisine /> */}
                      <GestionPizzas />
                   </RoleRoute>
                </PrivateRoute>

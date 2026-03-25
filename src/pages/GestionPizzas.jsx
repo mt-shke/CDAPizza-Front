@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { API_URL } from "../config";
+import { jwtDecode } from "jwt-decode";
 
 export default function GestionPizzas() {
    const [pizzas, setPizzas] = useState([]);
@@ -141,6 +142,8 @@ export default function GestionPizzas() {
       navigate("/login");
    };
 
+   const role = token ? jwtDecode(token).role : null;
+
    return (
       <div className="min-h-screen bg-orange-50">
          <nav className="bg-orange-500 px-6 py-4 flex items-center justify-between shadow-md">
@@ -277,18 +280,20 @@ export default function GestionPizzas() {
                                     ? "Fermer ✕"
                                     : "Modifier ✎"}
                               </span>
-                              <button
-                                 onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleSupprimer(pizza.id_pizza);
-                                 }}
-                                 disabled={deletingId === pizza.id_pizza}
-                                 className="text-red-400 hover:text-red-600 disabled:opacity-30 text-sm font-medium transition"
-                              >
-                                 {deletingId === pizza.id_pizza
-                                    ? "..."
-                                    : "Supprimer"}
-                              </button>
+                              {role === "cuisine" && (
+                                 <button
+                                    onClick={(e) => {
+                                       e.stopPropagation();
+                                       handleSupprimer(pizza.id_pizza);
+                                    }}
+                                    disabled={deletingId === pizza.id_pizza}
+                                    className="text-red-400 hover:text-red-600 disabled:opacity-30 text-sm font-medium transition"
+                                 >
+                                    {deletingId === pizza.id_pizza
+                                       ? "..."
+                                       : "Supprimer"}
+                                 </button>
+                              )}
                            </div>
                         </div>
 
