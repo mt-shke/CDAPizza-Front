@@ -6,6 +6,7 @@ import MesCommandes from "./pages/MesCommandes";
 import NouvelleCommande from "./pages/NouvelleCommande";
 import Unauthorized from "./pages/Unauthorized";
 import Register from "./pages/Register";
+import GestionPizzas from "./pages/GestionPizzas";
 
 function App() {
    return (
@@ -16,18 +17,6 @@ function App() {
          <Route path="/login" element={<Login />} />
          <Route path="/unauthorized" element={<Unauthorized />} />
          <Route path="/" element={<Navigate to="/login" />} />
-
-         {/* Caisse + Cuisine → toutes les commandes */}
-         <Route
-            path="/commandes"
-            element={
-               <PrivateRoute>
-                  <RoleRoute roles={["caisse", "cuisine"]}>
-                     <Commandes />
-                  </RoleRoute>
-               </PrivateRoute>
-            }
-         />
 
          {/* Client → ses commandes uniquement */}
          <Route
@@ -53,14 +42,26 @@ function App() {
             }
          />
 
+         {/* Caisse + Cuisine → toutes les commandes */}
+         <Route
+            path="/commandes"
+            element={
+               <PrivateRoute>
+                  <RoleRoute roles={["caisse", "cuisine"]}>
+                     <Commandes />
+                  </RoleRoute>
+               </PrivateRoute>
+            }
+         />
+
          {/* Cuisine uniquement */}
          <Route
-            path="/cuisine"
+            path="/gestion-pizzas"
             element={
                <PrivateRoute>
                   <RoleRoute roles={["cuisine"]}>
                      {/* <InterfaceCuisine /> */}
-                     <div>Interface cuisine - à venir</div>
+                     <GestionPizzas />
                   </RoleRoute>
                </PrivateRoute>
             }

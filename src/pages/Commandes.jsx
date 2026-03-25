@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { API_URL } from "../config";
+import { jwtDecode } from "jwt-decode";
 
 const ETAT_STYLES = {
    PAYER: "bg-yellow-100 text-yellow-700 border border-yellow-200",
@@ -195,6 +196,20 @@ export default function Commandes() {
       navigate("/login");
    };
 
+   const role = token ? jwtDecode(token).role : null;
+
+   useEffect(() => {
+      fetchAll();
+
+      // Rafraîchissement toutes les 10 secondes
+      const interval = setInterval(() => {
+         fetchAll();
+      }, 10000);
+
+      // Nettoyage à la destruction du composant
+      return () => clearInterval(interval);
+   }, []);
+
    return (
       <div className="min-h-screen bg-orange-50">
          <nav className="bg-orange-500 px-6 py-4 flex items-center justify-between shadow-md">
@@ -204,12 +219,22 @@ export default function Commandes() {
                   CDAPizza
                </span>
             </div>
-            <button
-               onClick={handleLogout}
-               className="text-orange-100 hover:text-white text-sm font-medium transition"
-            >
-               Déconnexion
-            </button>
+            <div className="flex items-center gap-4">
+               {role === "cuisine" && (
+                  <button
+                     onClick={() => navigate("/gestion-pizzas")}
+                     className="text-orange-100 hover:text-white text-sm font-medium transition"
+                  >
+                     Gérer les pizzas
+                  </button>
+               )}
+               <button
+                  onClick={handleLogout}
+                  className="text-orange-100 hover:text-white text-sm font-medium transition"
+               >
+                  Déconnexion
+               </button>
+            </div>
          </nav>
 
          <div className="max-w-4xl mx-auto px-4 py-8">
