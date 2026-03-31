@@ -35,7 +35,8 @@ export default function Register() {
          });
 
          if (response.status === 400) {
-            setError("Ce nom d'utilisateur est déjà pris");
+            const message = await response.text();
+            setError(message);
             setLoading(false);
             return;
          }
