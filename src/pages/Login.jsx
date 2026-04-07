@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { jwtDecode } from "jwt-decode";
 import { API_URL } from "../config";
 
 export default function Login() {
@@ -17,9 +16,10 @@ export default function Login() {
       setError("");
       setLoading(true);
       try {
-         const response = await fetch(API_URL + "/auth/login", {
+         const response = await fetch(`${API_URL}/auth/login`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({ username, password }),
          });
          if (!response.ok) {
@@ -28,10 +28,9 @@ export default function Login() {
             return;
          }
          const data = await response.json();
-         login(data.token);
+         login(data);
 
-         const decoded = jwtDecode(data.token);
-         if (decoded.role === "client") {
+         if (data.role === "client") {
             navigate("/mes-commandes");
          } else {
             navigate("/commandes");

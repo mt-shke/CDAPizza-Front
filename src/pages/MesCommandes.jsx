@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { jwtDecode } from "jwt-decode";
 import { API_URL } from "../config";
 
 const ETAT_STYLES = {
@@ -28,7 +27,6 @@ const ETAT_ORDER = {
 const getRemises = (lignes, numeroCommande) => {
    const remises = [];
 
-   // Remise 10% si c'est la 3ème, 6ème, 9ème commande
    if (numeroCommande && numeroCommande % 3 === 0) {
       remises.push({
          label: "−10% fidélité",
@@ -36,7 +34,6 @@ const getRemises = (lignes, numeroCommande) => {
       });
    }
 
-   // Remise 5% si plus de 5 pizzas
    const totalPizzas = (lignes || []).reduce(
       (sum, l) => sum + (l.quantite || 0),
       0,
@@ -58,7 +55,8 @@ export default function MesCommandes() {
    const [numeroCommandeParId, setNumeroCommandeParId] = useState({});
    const [loading, setLoading] = useState(true);
    const [error, setError] = useState("");
-   const { token, logout } = useAuth();
+
+   const { logout, getIdUser } = useAuth();
    const navigate = useNavigate();
 
    useEffect(() => {
@@ -67,12 +65,17 @@ export default function MesCommandes() {
 
    const fetchAll = async () => {
       try {
-         const decoded = jwtDecode(token);
-         const idUser = decoded.id_user;
+         const idUser = getIdUser();
+
+         if (!idUser) {
+            logout();
+            navigate("/login");
+            return;
+         }
 
          // Commandes
          const resCommandes = await fetch(API_URL + "/commandes", {
-            headers: { Authorization: `Bearer ${token}` },
+            credentials: "include",
          });
          if (resCommandes.status === 401) {
             logout();
@@ -83,6 +86,7 @@ export default function MesCommandes() {
          const allCommandes = await resCommandes.json();
          const mesCommandes = allCommandes.filter((c) => c.id_user === idUser);
          setCommandes(mesCommandes);
+         console.log(getIdUser);
 
          // Calcul du numéro chronologique de chaque commande du client
          const numeroCmd = {};
@@ -95,7 +99,7 @@ export default function MesCommandes() {
 
          // Pizzas
          const resPizzas = await fetch(API_URL + "/pizzas", {
-            headers: { Authorization: `Bearer ${token}` },
+            credentials: "include",
          });
          if (!resPizzas.ok) throw new Error();
          const allPizzas = await resPizzas.json();
@@ -111,13 +115,11 @@ export default function MesCommandes() {
             mesCommandes.map(async (c) => {
                const resLignes = await fetch(
                   API_URL + `/contenir/commande/${c.id_commande}`,
-                  { headers: { Authorization: `Bearer ${token}` } },
+                  { credentials: "include" },
                );
-               if (resLignes.ok) {
-                  lignesMap[c.id_commande] = await resLignes.json();
-               } else {
-                  lignesMap[c.id_commande] = [];
-               }
+               lignesMap[c.id_commande] = resLignes.ok
+                  ? await resLignes.json()
+                  : [];
             }),
          );
          setLignes(lignesMap);
@@ -214,7 +216,6 @@ export default function MesCommandes() {
                             : "bg-white border-gray-100"
                       }`}
                            >
-                              {/* Header */}
                               <div className="px-6 py-4 flex items-center justify-between">
                                  <div className="flex items-center gap-4">
                                     <div
@@ -273,7 +274,6 @@ export default function MesCommandes() {
                                  </div>
                               </div>
 
-                              {/* Pizzas */}
                               {lignes[commande.id_commande]?.length > 0 && (
                                  <div
                                     className={`border-t px-6 py-3

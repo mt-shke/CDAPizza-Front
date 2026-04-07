@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { API_URL } from "../config";
-import { jwtDecode } from "jwt-decode";
 
 export default function GestionPizzas() {
    const [pizzas, setPizzas] = useState([]);
@@ -16,7 +15,7 @@ export default function GestionPizzas() {
    const [editNom, setEditNom] = useState("");
    const [editPrix, setEditPrix] = useState("");
    const [saving, setSaving] = useState(false);
-   const { token, logout } = useAuth();
+   const { logout, getRole } = useAuth();
    const navigate = useNavigate();
 
    useEffect(() => {
@@ -26,7 +25,7 @@ export default function GestionPizzas() {
    const fetchPizzas = async () => {
       try {
          const response = await fetch(`${API_URL}/pizzas`, {
-            headers: { Authorization: `Bearer ${token}` },
+            credentials: "include",
          });
          if (response.status === 401) {
             logout();
@@ -49,12 +48,10 @@ export default function GestionPizzas() {
       setSubmitting(true);
       setError("");
       try {
-         const response = await fetch(`${API_URL}/pizzas`, {
+         const response = await fetch(API_URL + "/pizzas", {
             method: "POST",
-            headers: {
-               "Content-Type": "application/json",
-               Authorization: `Bearer ${token}`,
-            },
+            headers: { "Content-Type": "application/json" }, // ← ajouté
+            credentials: "include",
             body: JSON.stringify({ nom: nom.trim(), prix: parseFloat(prix) }),
          });
          if (response.status === 409) {
@@ -79,7 +76,7 @@ export default function GestionPizzas() {
       try {
          const response = await fetch(`${API_URL}/pizzas/${id}`, {
             method: "DELETE",
-            headers: { Authorization: `Bearer ${token}` },
+            credentials: "include",
          });
          if (!response.ok) throw new Error();
          setPizzas((prev) => prev.filter((p) => p.id_pizza !== id));
@@ -109,12 +106,10 @@ export default function GestionPizzas() {
       setSaving(true);
       setError("");
       try {
-         const response = await fetch(`${API_URL}/pizzas/${pizza.id_pizza}`, {
+         const response = await fetch(API_URL + `/pizzas/${pizza.id_pizza}`, {
             method: "PUT",
-            headers: {
-               "Content-Type": "application/json",
-               Authorization: `Bearer ${token}`,
-            },
+            headers: { "Content-Type": "application/json" }, // ← ajouté
+            credentials: "include",
             body: JSON.stringify({
                nom: editNom.trim(),
                prix: parseFloat(editPrix),
@@ -142,7 +137,7 @@ export default function GestionPizzas() {
       navigate("/login");
    };
 
-   const role = token ? jwtDecode(token).role : null;
+   const role = getRole();
 
    return (
       <div className="min-h-screen bg-orange-50">

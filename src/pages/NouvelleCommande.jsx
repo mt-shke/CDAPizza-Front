@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
-import { jwtDecode } from "jwt-decode";
 import { API_URL } from "../config";
 
 export default function NouvelleCommande() {
@@ -11,7 +10,8 @@ export default function NouvelleCommande() {
    const [loading, setLoading] = useState(true);
    const [submitting, setSubmitting] = useState(false);
    const [error, setError] = useState("");
-   const { token, logout } = useAuth();
+
+   const { logout, getIdUser } = useAuth();
    const navigate = useNavigate();
 
    useEffect(() => {
@@ -20,12 +20,16 @@ export default function NouvelleCommande() {
 
    const fetchData = async () => {
       try {
-         const decoded = jwtDecode(token);
-         const idUser = decoded.id_user;
+         const idUser = getIdUser();
+         if (!idUser) {
+            logout();
+            navigate("/login");
+            return;
+         }
 
          // Pizzas
          const resPizzas = await fetch(API_URL + "/pizzas", {
-            headers: { Authorization: `Bearer ${token}` },
+            credentials: "include",
          });
          if (resPizzas.status === 401) {
             logout();
@@ -41,9 +45,9 @@ export default function NouvelleCommande() {
          });
          setQuantites(init);
 
-         // Nombre de commandes existantes du client (pour calculer la remise fidélité)
+         // Nombre de commandes du client pour la remise fidélité
          const resCommandes = await fetch(API_URL + "/commandes", {
-            headers: { Authorization: `Bearer ${token}` },
+            credentials: "include",
          });
          if (resCommandes.ok) {
             const allCommandes = await resCommandes.json();
@@ -68,18 +72,15 @@ export default function NouvelleCommande() {
    };
 
    const pizzasPanier = pizzas.filter((p) => quantites[p.id_pizza] > 0);
-
    const totalPizzas = pizzasPanier.reduce(
       (sum, p) => sum + quantites[p.id_pizza],
       0,
    );
-
    const montantBrut = pizzasPanier.reduce(
       (total, p) => total + Number(p.prix) * quantites[p.id_pizza],
       0,
    );
 
-   // Calcul des remises
    const remiseFidelite = (nbCommandesClient + 1) % 3 === 0;
    const remiseVolume = totalPizzas >= 5;
    let tauxRemise = 0;
@@ -99,15 +100,12 @@ export default function NouvelleCommande() {
       setError("");
 
       try {
-         const decoded = jwtDecode(token);
-         const idUser = decoded.id_user;
+         const idUser = getIdUser();
 
          const response = await fetch(API_URL + "/commandes", {
             method: "POST",
-            headers: {
-               "Content-Type": "application/json",
-               Authorization: `Bearer ${token}`,
-            },
+            headers: { "Content-Type": "application/json" },
+            credentials: "include",
             body: JSON.stringify({
                id_user: idUser,
                lignes: pizzasPanier.map((pizza) => ({
@@ -164,7 +162,7 @@ export default function NouvelleCommande() {
                </p>
             </div>
 
-            {/* Bandeaux remises disponibles */}
+            {/* Bandeaux remises */}
             <div className="flex flex-wrap gap-2 mb-6">
                <div
                   className={`text-xs font-medium px-3 py-1.5 rounded-lg border ${
@@ -223,11 +221,7 @@ export default function NouvelleCommande() {
                      <div
                         key={pizza.id_pizza}
                         className={`bg-white border rounded-xl shadow-sm overflow-hidden transition
-                  ${
-                     quantites[pizza.id_pizza] > 0
-                        ? "border-orange-300"
-                        : "border-gray-100"
-                  }`}
+                  ${quantites[pizza.id_pizza] > 0 ? "border-orange-300" : "border-gray-100"}`}
                      >
                         <div className="h-2 bg-orange-400" />
                         <div className="px-5 py-4 flex items-center justify-between">
@@ -295,7 +289,6 @@ export default function NouvelleCommande() {
                   </div>
                </div>
 
-               {/* Badges remises actives */}
                {tauxRemise > 0 && (
                   <div className="flex gap-2 mb-3">
                      {remiseFidelite && (

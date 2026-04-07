@@ -1,54 +1,47 @@
-import { createContext, useContext, useState } from "react";
-import { jwtDecode } from "jwt-decode";
+import { createContext, useContext, useState, useEffect } from "react";
+import { API_URL } from "../config";
 
 const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
-   const [token, setToken] = useState(localStorage.getItem("token"));
+   const [user, setUser] = useState(null);
+   const [loading, setLoading] = useState(true);
 
-   const login = (newToken) => {
-      localStorage.setItem("token", newToken);
-      setToken(newToken);
+   // Au démarrage, vérifie si le cookie est valide
+   useEffect(() => {
+      fetch(`${API_URL}/auth/me`, {
+         credentials: "include", // envoie le cookie automatiquement
+      })
+         .then((res) => (res.ok ? res.json() : null))
+         .then((data) => {
+            setUser(data);
+            setLoading(false);
+         })
+         .catch(() => setLoading(false));
+   }, []);
+
+   const login = (userData) => {
+      setUser(userData); // userData = { username, role, id_user }
    };
 
-   const logout = () => {
-      localStorage.removeItem("token");
-      setToken(null);
+   const logout = async () => {
+      await fetch(`${API_URL}/auth/logout`, {
+         method: "POST",
+         credentials: "include",
+      });
+      setUser(null);
    };
 
-   const isAuthenticated = () => !!token;
-
-   const getRole = () => {
-      if (!token) return null;
-      try {
-         return jwtDecode(token).role;
-      } catch {
-         return null;
-      }
-   };
-
-   const getIdUser = () => {
-      if (!token) return null;
-      try {
-         return jwtDecode(token).id_user;
-      } catch {
-         return null;
-      }
-   };
-
-   const getUsername = () => {
-      if (!token) return null;
-      try {
-         return jwtDecode(token).sub;
-      } catch {
-         return null;
-      }
-   };
+   const isAuthenticated = () => !!user;
+   const getRole = () => user?.role || null;
+   const getIdUser = () => user?.id_user || null;
+   const getUsername = () => user?.username || null;
 
    return (
       <AuthContext.Provider
          value={{
-            token,
+            user,
+            loading,
             login,
             logout,
             isAuthenticated,

@@ -1,10 +1,9 @@
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
-import { jwtDecode } from "jwt-decode";
 
 export default function Unauthorized() {
    const navigate = useNavigate();
-   const { token } = useAuth();
+   const { token, getRole } = useAuth();
 
    const handleRetour = () => {
       if (!token) {
@@ -12,8 +11,8 @@ export default function Unauthorized() {
          return;
       }
       try {
-         const decoded = jwtDecode(token);
-         if (decoded.role === "client") {
+         const role = getRole();
+         if (role === "client") {
             navigate("/mes-commandes");
          } else {
             navigate("/commandes");

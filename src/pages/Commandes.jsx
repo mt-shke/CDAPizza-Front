@@ -2,7 +2,6 @@ import { useState, useEffect } from "react";
 import { useAuth } from "../auth/AuthContext";
 import { useNavigate } from "react-router-dom";
 import { API_URL } from "../config";
-import { jwtDecode } from "jwt-decode";
 import CommandeCard from "../components/CommandeCard";
 
 const ETAT_ORDER = {
@@ -22,9 +21,8 @@ export default function Commandes() {
    const [error, setError] = useState("");
    const [selectedId, setSelectedId] = useState(null);
    const [updating, setUpdating] = useState(false);
-   const { token, logout } = useAuth();
+   const { logout, getRole } = useAuth();
    const navigate = useNavigate();
-   const role = token ? jwtDecode(token).role : null;
 
    useEffect(() => {
       fetchAll();
@@ -35,7 +33,7 @@ export default function Commandes() {
    const fetchAll = async () => {
       try {
          const resCommandes = await fetch(API_URL + "/commandes", {
-            headers: { Authorization: `Bearer ${token}` },
+            credentials: "include",
          });
          if (resCommandes.status === 401) {
             logout();
@@ -58,7 +56,7 @@ export default function Commandes() {
          setNumeroCommandeParUser(numeroCmd);
 
          const resPizzas = await fetch(API_URL + "/pizzas", {
-            headers: { Authorization: `Bearer ${token}` },
+            credentials: "include",
          });
          if (!resPizzas.ok) throw new Error();
          const allPizzas = await resPizzas.json();
@@ -69,7 +67,7 @@ export default function Commandes() {
          setPizzas(pizzaMap);
 
          const resUsers = await fetch(API_URL + "/users", {
-            headers: { Authorization: `Bearer ${token}` },
+            credentials: "include",
          });
          if (resUsers.ok) {
             const allUsers = await resUsers.json();
@@ -85,7 +83,7 @@ export default function Commandes() {
             allCommandes.map(async (c) => {
                const resLignes = await fetch(
                   API_URL + `/contenir/commande/${c.id_commande}`,
-                  { headers: { Authorization: `Bearer ${token}` } },
+                  { credentials: "include" },
                );
                lignesMap[c.id_commande] = resLignes.ok
                   ? await resLignes.json()
@@ -119,10 +117,8 @@ export default function Commandes() {
             API_URL + `/commandes/${commande.id_commande}`,
             {
                method: "PUT",
-               headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${token}`,
-               },
+               headers: { "Content-Type": "application/json" }, // ← ajouté
+               credentials: "include",
                body: JSON.stringify({
                   date: commande.date,
                   montant: commande.montant,
@@ -146,11 +142,12 @@ export default function Commandes() {
          setUpdating(false);
       }
    };
-
    const handleLogout = () => {
       logout();
       navigate("/login");
    };
+
+   const role = getRole();
 
    return (
       <div className="min-h-screen bg-orange-50">
